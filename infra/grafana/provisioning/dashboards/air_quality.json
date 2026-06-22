@@ -1,0 +1,115 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "Virtual Air Quality Gateway",
+  "uid": "air-quality",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "5s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "AQI theo trạm",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 51 },
+              { "color": "orange", "value": 101 },
+              { "color": "red", "value": 151 },
+              { "color": "purple", "value": 201 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and r._field == \"aqi\")\n  |> group(columns: [\"station_id\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"station_id\"])"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "PM2.5 và PM10 theo thời gian",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": { "defaults": { "unit": "conµg/m³" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"pm2_5\" or r._field == \"pm10\"))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"station_id\", \"_field\"])"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Nồng độ CO / NO2 / O3 theo trạm",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"co_ppm\" or r._field == \"no2_ppb\" or r._field == \"o3_ppb\"))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"station_id\", \"_field\"])"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Trạng thái actuator mới nhất (fan/purifier/mist/board)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"actuator_status\")\n  |> last()\n  |> pivot(rowKey: [\"station_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"station_id\", \"fan\", \"purifier\", \"mist\", \"board\"])"
+        }
+      ],
+      "transformations": [{ "id": "organize", "options": {} }]
+    },
+    {
+      "id": 5,
+      "title": "Số event theo cấp (severity) theo thời gian",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gateway_events\" and r._field == \"aqi\")\n  |> group(columns: [\"severity\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Event gần nhất",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gateway_events\" and (r._field == \"aqi\" or r._field == \"action_taken\"))\n  |> pivot(rowKey: [\"_time\", \"station_id\", \"event_type\", \"severity\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 20)\n  |> keep(columns: [\"_time\", \"station_id\", \"event_type\", \"severity\", \"aqi\", \"action_taken\"])"
+        }
+      ]
+    }
+  ]
+}

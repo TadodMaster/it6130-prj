@@ -1,0 +1,13 @@
+[project]
+name = "it6130"
+version = "0.1.0"
+description = "IT6130 Source Code"
+requires-python = ">=3.10"
+dependencies = [
+    "paho-mqtt",
+    "requests",
+    "psutil",
+    "influxdb-client",
+    "fastapi",
+    "pydantic"
+]
