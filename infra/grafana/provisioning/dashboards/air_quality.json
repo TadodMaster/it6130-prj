@@ -45,12 +45,12 @@
       "type": "timeseries",
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "fieldConfig": { "defaults": { "unit": "conµg/m³" } },
+      "fieldConfig": { "defaults": { "unit": "conμgm3" } },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"pm2_5\" or r._field == \"pm10\"))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"station_id\", \"_field\"])"
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"pm2_5\" or r._field == \"pm10\"))\n  |> group(columns: [\"station_id\", \"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"station_id\", \"_field\"])"
         }
       ]
     },
@@ -64,7 +64,7 @@
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"co_ppm\" or r._field == \"no2_ppb\" or r._field == \"o3_ppb\"))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"station_id\", \"_field\"])"
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"air_quality\" and (r._field == \"co_ppm\" or r._field == \"no2_ppb\" or r._field == \"o3_ppb\"))\n  |> group(columns: [\"station_id\", \"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"station_id\", \"_field\"])"
         }
       ]
     },
@@ -74,26 +74,119 @@
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "center", "cellOptions": { "type": "color-background", "mode": "basic" } },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "on":  { "text": "on",  "color": "green",   "index": 0 },
+                "max": { "text": "max", "color": "red",     "index": 1 },
+                "off": { "text": "off", "color": "#5A5A5A", "index": 2 }
+              }
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "station_id" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "auto" } },
+              { "id": "displayName", "value": "Station ID" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "station-01": { "text": "1", "index": 0 },
+                      "station-02": { "text": "2", "index": 1 },
+                      "station-03": { "text": "3", "index": 2 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "board" },
+            "properties": [
+              { "id": "displayName", "value": "Status" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Good":           { "text": "Good",           "color": "green",  "index": 0 },
+                      "Moderate":       { "text": "Moderate",       "color": "yellow", "index": 1 },
+                      "USG":            { "text": "USG",            "color": "orange", "index": 2 },
+                      "Unhealthy":      { "text": "Unhealthy",      "color": "red",    "index": 3 },
+                      "Very Unhealthy": { "text": "Very Unhealthy", "color": "purple", "index": 4 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "fan" },
+            "properties": [{ "id": "displayName", "value": "Fan Status" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "mist" },
+            "properties": [{ "id": "displayName", "value": "Mist Status" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "purifier" },
+            "properties": [{ "id": "displayName", "value": "Purifier Status" }]
+          }
+        ]
+      },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"actuator_status\")\n  |> last()\n  |> pivot(rowKey: [\"station_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"station_id\", \"fan\", \"purifier\", \"mist\", \"board\"])"
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"actuator_status\")\n  |> last()\n  |> pivot(rowKey: [\"station_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> keep(columns: [\"station_id\", \"fan\", \"purifier\", \"mist\", \"board\"])\n  |> sort(columns: [\"station_id\"])"
         }
       ],
-      "transformations": [{ "id": "organize", "options": {} }]
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": { "station_id": 0, "board": 1, "fan": 2, "mist": 3, "purifier": 4 }
+          }
+        }
+      ]
     },
     {
       "id": 5,
       "title": "Số event theo cấp (severity) theo thời gian",
-      "type": "barchart",
+      "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "barAlignment": 0,
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gateway_events\" and r._field == \"aqi\")\n  |> group(columns: [\"severity\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)"
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gateway_events\" and r._field == \"aqi\")\n  |> group(columns: [\"severity\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"severity\"])"
         }
       ]
     },
