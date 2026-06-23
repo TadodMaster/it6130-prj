@@ -4,7 +4,7 @@
   "title": "Virtual Air Quality Gateway",
   "uid": "air-quality",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 3,
   "time": { "from": "now-1h", "to": "now" },
   "refresh": "5s",
   "templating": { "list": [] },
@@ -22,11 +22,12 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 51 },
-              { "color": "orange", "value": 101 },
-              { "color": "red", "value": 151 },
-              { "color": "purple", "value": 201 }
+              { "color": "#00E400", "value": null },
+              { "color": "#FFFF00", "value": 51 },
+              { "color": "#FF7E00", "value": 101 },
+              { "color": "#FF0000", "value": 151 },
+              { "color": "#8F3F97", "value": 201 },
+              { "color": "#7E0023", "value": 301 }
             ]
           }
         }
@@ -119,11 +120,12 @@
                   {
                     "type": "value",
                     "options": {
-                      "Good":           { "text": "Good",           "color": "green",  "index": 0 },
-                      "Moderate":       { "text": "Moderate",       "color": "yellow", "index": 1 },
-                      "USG":            { "text": "USG",            "color": "orange", "index": 2 },
-                      "Unhealthy":      { "text": "Unhealthy",      "color": "red",    "index": 3 },
-                      "Very Unhealthy": { "text": "Very Unhealthy", "color": "purple", "index": 4 }
+                      "Good":           { "text": "Good",           "color": "#00E400", "index": 0 },
+                      "Moderate":       { "text": "Moderate",       "color": "#FFFF00", "index": 1 },
+                      "USG":            { "text": "USG",            "color": "#FF7E00", "index": 2 },
+                      "Unhealthy":      { "text": "Unhealthy",      "color": "#FF0000", "index": 3 },
+                      "Very Unhealthy": { "text": "Very Unhealthy", "color": "#8F3F97", "index": 4 },
+                      "Hazardous":      { "text": "Hazardous",      "color": "#7E0023", "index": 5 }
                     }
                   }
                 ]
@@ -148,7 +150,7 @@
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"air_quality\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"actuator_status\")\n  |> last()\n  |> pivot(rowKey: [\"station_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> keep(columns: [\"station_id\", \"fan\", \"purifier\", \"mist\", \"board\"])\n  |> sort(columns: [\"station_id\"])"
+          "query": "from(bucket: \"air_quality\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"actuator_status\")\n  |> last()\n  |> drop(columns: [\"_time\", \"_start\", \"_stop\"])\n  |> pivot(rowKey: [\"station_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> keep(columns: [\"station_id\", \"fan\", \"purifier\", \"mist\", \"board\"])\n  |> sort(columns: [\"station_id\"])"
         }
       ],
       "transformations": [

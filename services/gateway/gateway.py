@@ -96,26 +96,60 @@ def handle_telemetry(client, m: dict):
 
 
 def handle_status(status: dict):
-    """Lưu trạng thái actuator vào Influx + cache."""
+    """Lưu trạng thái actuator vào Influx + cache, và đẩy lên ThingsBoard."""
     station = status.get("station_id")
     if not station:
         return
+
+    prev = LATEST.get(station, {}).get("actuator", {})
     LATEST.setdefault(station, {})["actuator"] = status
     influx.write_actuator_status(status)
+
+    # Đẩy trạng thái actuator lên ThingsBoard để widget phản ánh cả khi rule
+    # engine TỰ đổi trạng thái (không chỉ khi người dùng bấm nút). Chỉ gửi khi
+    # có thay đổi thật để tránh spam telemetry mỗi chu kỳ sensor.
+    fields = ("fan", "purifier", "mist", "board")
+    changed = [f for f in fields if status.get(f) != prev.get(f)]
+    print(f"[gateway] STATUS <- {station} "
+          f"fan={status.get('fan')} purifier={status.get('purifier')} "
+          f"mist={status.get('mist')} board={status.get('board')} "
+          f"| changed={','.join(changed) if changed else 'none'}", flush=True)
+
+    if changed:
+        vals = {f: status.get(f) for f in fields}
+        tb.send_telemetry(station, vals, ts_ms=int(time.time() * 1000))
+        print(f"[gateway] -> TB telemetry {station}: {vals}", flush=True)
 
 
 # ---------------------------------------------------------------------------
 # RPC từ ThingsBoard -> chuyển thành command MQTT tới actuator
 # ---------------------------------------------------------------------------
 def make_rpc_handler(client):
-    method_map = {
+    set_map = {
         "setFan": "fan", "setPurifier": "purifier",
         "setMist": "mist", "setBoard": "board",
     }
+    # get-method -> target. "getValue" giữ tương thích với switch đã cấu hình.
+    get_map = {
+        "getValue": "purifier",
+        "getFan": "fan", "getPurifier": "purifier",
+        "getMist": "mist", "getBoard": "board",
+    }
 
     def on_rpc(device, method, params):
-        target = method_map.get(method)
+        # --- GET: trả trạng thái hiện tại để widget hiển thị đúng lúc load ---
+        if method in get_map:
+            target = get_map[method]
+            state = LATEST.get(device, {}).get("actuator", {}).get(target, "off")
+            result = state if target == "board" else state in ("on", "max")
+            print(f"[gateway] RPC GET  {method} {device}.{target} "
+                  f"state={state!r} -> {result!r}", flush=True)
+            return result
+
+        # --- SET: chuyển RPC thành command MQTT tới actuator ---
+        target = set_map.get(method)
         if not target:
+            print(f"[gateway] RPC UNKNOWN method={method!r} device={device}", flush=True)
             return {"success": False, "error": f"unknown method {method}"}
         if target == "board":
             action = str(params)
@@ -124,6 +158,8 @@ def make_rpc_handler(client):
         payload = {"station_id": device, "target": target,
                    "action": action, "reason": "manual_rpc", "timestamp": now_iso()}
         client.publish(f"city/{device}/actuator/command", json.dumps(payload), qos=1)
+        print(f"[gateway] RPC SET  {method} {device}.{target} params={params!r} "
+              f"-> action={action} (command published)", flush=True)
         return {"success": True, "target": target, "action": action}
 
     return on_rpc
