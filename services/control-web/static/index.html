@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Virtual Air Quality - Control Web</title>
+  <style>
+    :root {
+      --bg:#0f1117; --panel:#181b24; --card:#1e2230; --card2:#252a3a;
+      --line:#2e3445; --txt:#e6e8ee; --muted:#9aa3b5; --accent:#3b82f6;
+      --good:#22c55e; --off:#3a4256;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--txt);
+           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; }
+
+    header { display:flex; align-items:center; justify-content:space-between;
+             gap:16px; padding:16px 24px; background:var(--panel);
+             border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+    header h1 { margin:0; font-size:17px; font-weight:600; letter-spacing:.3px; }
+    header .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+    #conn { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; }
+    #conn .dot { width:9px; height:9px; border-radius:50%; background:var(--muted);
+                 box-shadow:0 0 0 0 rgba(0,0,0,0); transition:.3s; }
+    #conn.ok .dot { background:var(--good); box-shadow:0 0 8px 1px rgba(34,197,94,.7); }
+    #conn.bad .dot { background:#ef4444; box-shadow:0 0 8px 1px rgba(239,68,68,.7); }
+
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+            gap:18px; padding:22px 24px; max-width:1400px; margin:0 auto; }
+
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+            overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.25); }
+    .card-head { display:flex; align-items:center; justify-content:space-between;
+                 padding:12px 16px; border-bottom:1px solid var(--line); }
+    .card-head h2 { margin:0; font-size:14px; font-weight:600; letter-spacing:1px; }
+    .badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px;
+             background:var(--card2); color:var(--muted); }
+
+    .aqi-wrap { display:flex; align-items:center; gap:16px; padding:16px; }
+    .aqi { width:96px; height:96px; flex:none; border-radius:16px; color:#fff;
+           display:flex; flex-direction:column; align-items:center; justify-content:center;
+           background:#555; transition:background .4s; }
+    .aqi .num { font-size:34px; font-weight:800; line-height:1; }
+    .aqi .tag { font-size:10px; font-weight:700; opacity:.9; margin-top:3px; }
+    .aqi-meta .cat { font-size:15px; font-weight:700; }
+    .aqi-meta .dom { font-size:12px; color:var(--muted); margin-top:4px; }
+
+    .metrics { display:grid; grid-template-columns:1fr 1fr; gap:1px;
+               background:var(--line); border-top:1px solid var(--line);
+               border-bottom:1px solid var(--line); }
+    .metric { background:var(--card); padding:9px 16px; display:flex;
+              justify-content:space-between; align-items:baseline; }
+    .metric .k { font-size:12px; color:var(--muted); }
+    .metric .v { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+
+    .section-title { font-size:11px; font-weight:700; letter-spacing:1px;
+                     color:var(--muted); text-transform:uppercase; padding:14px 16px 6px; }
+
+    .actuators { padding:0 16px 6px; }
+    .act { display:flex; align-items:center; gap:12px; padding:9px 0;
+           border-bottom:1px solid var(--line); }
+    .act:last-child { border-bottom:none; }
+    .act .name { flex:1; font-size:14px; }
+    .act .state { font-size:11px; font-weight:700; width:34px; text-align:right;
+                  color:var(--muted); letter-spacing:.5px; }
+    .act .state.on { color:var(--good); }
+
+    /* toggle switch */
+    .switch { position:relative; display:inline-block; width:46px; height:26px; flex:none; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; inset:0; cursor:pointer; background:var(--off);
+              border-radius:999px; transition:.25s; }
+    .slider:before { content:""; position:absolute; height:20px; width:20px; left:3px;
+                     top:3px; background:#fff; border-radius:50%; transition:.25s; }
+    .switch input:checked + .slider { background:var(--good); }
+    .switch input:checked + .slider:before { transform:translateX(20px); }
+    .switch input:disabled + .slider { opacity:.5; cursor:wait; }
+
+    .board { padding:10px 16px 4px; display:flex; align-items:center; gap:8px;
+             font-size:12px; color:var(--muted); }
+    .board b { color:var(--txt); font-weight:600; }
+
+    .events { padding:6px 16px 16px; }
+    .events ul { list-style:none; margin:0; padding:0; }
+    .events li { font-size:12px; color:var(--muted); padding:4px 0;
+                 border-bottom:1px dashed var(--line); }
+    .events li:last-child { border-bottom:none; }
+    .events .sev { font-weight:700; }
+    .events .empty { font-size:12px; color:var(--muted); font-style:italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Virtual Air Quality — Control</h1>
+      <div class="sub" id="updated">—</div>
+    </div>
+    <div id="conn" class="bad"><span class="dot"></span><span id="conn-txt">Đang kết nối API...</span></div>
+  </header>
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const REFRESH_MS = parseInt("__REFRESH_MS__", 10) || 3000;
+    const STATIONS = "__STATIONS__".split(",");
+    const METRICS = [
+      ["pm2_5","PM2.5"], ["pm10","PM10"], ["co_ppm","CO (ppm)"],
+      ["no2_ppb","NO2 (ppb)"], ["o3_ppb","O3 (ppb)"],
+      ["temperature","Nhiệt độ"], ["humidity","Độ ẩm"],
+    ];
+    const ACTUATORS = ["fan", "purifier", "mist"];
+
+    function aqiInfo(a) {
+      if (a == null) return { color:"#555", tag:"N/A" };
+      if (a <= 50)  return { color:"#22c55e", tag:"GOOD" };
+      if (a <= 100) return { color:"#eab308", tag:"MODERATE" };
+      if (a <= 150) return { color:"#f97316", tag:"USG" };
+      if (a <= 200) return { color:"#ef4444", tag:"UNHEALTHY" };
+      if (a <= 300) return { color:"#a855f7", tag:"V.UNHEALTHY" };
+      return { color:"#7e0023", tag:"HAZARDOUS" };
+    }
+    const isOn = v => String(v).toLowerCase() === "on";
+
+    const grid = document.getElementById("grid");
+    const refs = {};
+
+    for (const sid of STATIONS) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="card-head">
+          <h2>${sid.toUpperCase()}</h2>
+          <span class="badge">offline</span>
+        </div>
+        <div class="aqi-wrap">
+          <div class="aqi"><span class="num">--</span><span class="tag">N/A</span></div>
+          <div class="aqi-meta">
+            <div class="cat">Chưa có dữ liệu</div>
+            <div class="dom">dominant: -</div>
+          </div>
+        </div>
+        <div class="metrics"></div>
+        <div class="section-title">Điều khiển</div>
+        <div class="actuators"></div>
+        <div class="board">Board: <b class="board-val">-</b></div>
+        <div class="section-title">Event gần nhất</div>
+        <div class="events"><div class="empty">-</div></div>`;
+      grid.appendChild(card);
+
+      // metrics
+      const metricsEl = card.querySelector(".metrics");
+      const metricRefs = {};
+      for (const [key, label] of METRICS) {
+        const d = document.createElement("div");
+        d.className = "metric";
+        d.innerHTML = `<span class="k">${label}</span><span class="v">-</span>`;
+        metricsEl.appendChild(d);
+        metricRefs[key] = d.querySelector(".v");
+      }
+
+      // actuators (toggle switches reflecting live state)
+      const actEl = card.querySelector(".actuators");
+      const toggleRefs = {};
+      for (const target of ACTUATORS) {
+        const row = document.createElement("div");
+        row.className = "act";
+        row.innerHTML = `
+          <span class="name">${target[0].toUpperCase()+target.slice(1)}</span>
+          <span class="state">--</span>
+          <label class="switch"><input type="checkbox"><span class="slider"></span></label>`;
+        actEl.appendChild(row);
+        const input = row.querySelector("input");
+        const state = row.querySelector(".state");
+        input.addEventListener("change", () =>
+          sendCommand(sid, target, input.checked ? "on" : "off", input));
+        toggleRefs[target] = { input, state };
+      }
+
+      refs[sid] = {
+        badge: card.querySelector(".badge"),
+        aqi: card.querySelector(".aqi"),
+        aqiNum: card.querySelector(".aqi .num"),
+        aqiTag: card.querySelector(".aqi .tag"),
+        cat: card.querySelector(".cat"),
+        dom: card.querySelector(".dom"),
+        board: card.querySelector(".board-val"),
+        events: card.querySelector(".events"),
+        metrics: metricRefs,
+        toggles: toggleRefs,
+      };
+    }
+
+    function setConn(ok, info) {
+      const el = document.getElementById("conn");
+      el.className = ok ? "ok" : "bad";
+      document.getElementById("conn-txt").textContent =
+        (ok ? "API: " : "Mất kết nối: ") + info;
+    }
+
+    function renderStation(sid, state, events) {
+      const r = refs[sid];
+      const norm = (state && state.normalized) || {};
+      const act  = (state && state.actuator) || {};
+      const hasData = Object.keys(norm).length > 0;
+
+      r.badge.textContent = hasData ? "online" : "offline";
+      r.badge.style.color = hasData ? "var(--good)" : "var(--muted)";
+
+      const aqi = norm.aqi;
+      const info = aqiInfo(aqi);
+      r.aqiNum.textContent = (aqi != null) ? aqi : "--";
+      r.aqiTag.textContent = info.tag;
+      r.aqi.style.background = info.color;
+      r.cat.textContent = norm.category || "Chưa có dữ liệu";
+      r.dom.textContent = "dominant: " + (norm.dominant || "-");
+
+      for (const key in r.metrics) {
+        const v = norm[key];
+        r.metrics[key].textContent = (v != null) ? v : "-";
+      }
+
+      // toggles reflect current actuator value (skip if user is mid-click)
+      for (const target of ACTUATORS) {
+        const t = r.toggles[target];
+        if (t.input.disabled) continue;
+        const val = act[target];
+        if (val == null) { t.state.textContent = "--"; t.state.className = "state"; continue; }
+        const on = isOn(val);
+        t.input.checked = on;
+        t.state.textContent = on ? "ON" : "OFF";
+        t.state.className = on ? "state on" : "state";
+      }
+      r.board.textContent = act.board ?? "-";
+
+      const list = (events || []).slice(0, 5);
+      if (list.length) {
+        r.events.innerHTML = "<ul>" + list.map(e =>
+          `<li>${e.event_type} · aqi=${e.aqi} · <span class="sev">${e.severity}</span></li>`
+        ).join("") + "</ul>";
+      } else {
+        r.events.innerHTML = `<div class="empty">Chưa có event</div>`;
+      }
+    }
+
+    async function sendCommand(sid, target, action, input) {
+      input.disabled = true;  // khoá tạm để refresh không ghi đè lúc đang gửi
+      try {
+        const res = await fetch(`/api/stations/${sid}/command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target, action, reason: "manual_web" }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setConn(true, `đã gửi ${target} → ${action}`);
+      } catch (e) {
+        setConn(false, `lỗi gửi lệnh: ${e.message || e}`);
+        input.checked = !input.checked;  // hoàn tác nếu lỗi
+      } finally {
+        input.disabled = false;
+        refresh();
+      }
+    }
+
+    async function refresh() {
+      try {
+        const h = await fetch("/api/health");
+        if (!h.ok) throw new Error(await h.text());
+        const health = await h.json();
+        setConn(true, health.status || "ok");
+      } catch (e) {
+        setConn(false, e.message || String(e));
+        return;
+      }
+      for (const sid of STATIONS) {
+        try {
+          const [st, ev] = await Promise.all([
+            fetch(`/api/stations/${sid}/state`).then(r => r.ok ? r.json() : {}),
+            fetch(`/api/stations/${sid}/events?limit=8`).then(r => r.ok ? r.json() : { events: [] }),
+          ]);
+          renderStation(sid, st, (ev && ev.events) || []);
+        } catch (_) { /* giữ dữ liệu cũ nếu 1 trạm lỗi tạm thời */ }
+      }
+      document.getElementById("updated").textContent =
+        "Cập nhật lúc " + new Date().toLocaleTimeString();
+    }
+
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+  </script>
+</body>
+</html>
