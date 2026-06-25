@@ -9,5 +9,6 @@ dependencies = [
     "psutil",
     "influxdb-client",
     "fastapi",
-    "pydantic"
+    "pydantic",
+    "requests==2.32.3",
 ]

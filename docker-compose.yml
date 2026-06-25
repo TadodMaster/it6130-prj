@@ -217,6 +217,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # ----------------------------------------------------------------------- #
+  # Control Web (FastAPI + dashboard)
+  # ----------------------------------------------------------------------- #
+  control-web:
+    build: ./services/control-web
+    container_name: control-web
+    ports:
+      - "8080:8080"
+    environment:
+      API_BASE: http://air-api:8000
+      REFRESH_MS: ${REFRESH_MS:-3000}
+    depends_on:
+      air-api:
+        condition: service_healthy
+    networks: [air-net]
+    restart: unless-stopped
+
 networks:
   air-net:
     driver: bridge
